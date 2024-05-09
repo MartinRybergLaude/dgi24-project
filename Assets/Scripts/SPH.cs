@@ -5,21 +5,24 @@ using System.Runtime.InteropServices;
 
 [System.Serializable]
 [StructLayout(LayoutKind.Sequential, Size = 44)]
-public struct Particle {
+public struct Particle
+{
   public Vector3 CurrForce;
   public Vector3 Velocity;
   public Vector3 Position;
   public float Pressure;
   public float Density;
-    
+
 }
 
-public class SPH : MonoBehaviour {
+public class SPH : MonoBehaviour
+{
+  [Header("collision")]
+  public Transform collisionSphere;
 
   [Header("particles")]
   public float R = 0.1f;
-  public int AmountParticlesPerAxis = 10;
-  public int TotalParticles = 1000;
+  public Vector3Int AmountParticles = new Vector3Int(10, 10, 10);
   public Vector3 SpawnLoc;
   public Vector3 G;
   public bool Visible;
@@ -51,6 +54,13 @@ public class SPH : MonoBehaviour {
   private ComputeBuffer argsBuffer;
   private static readonly int SizeProperty = Shader.PropertyToID("_size");
   private static readonly int ParticlesBufferProperty = Shader.PropertyToID("_particlesBuffer");
+  private int totalParticles
+  {
+    get
+    {
+      return AmountParticles.x * AmountParticles.y * AmountParticles.z;
+    }
+  }
 
   private void OnDrawGizmos()
   {
@@ -60,33 +70,36 @@ public class SPH : MonoBehaviour {
     Gizmos.DrawWireCube(Vector3.zero, BoundingBox);
   }
 
-  private void Awake () {
+  private void Awake()
+  {
+    SpawnParticles();
+
     uint[] args = {
       ParticleMesh.GetIndexCount(0),
-      (uint)AmountParticlesPerAxis,
+      (uint)totalParticles,
       ParticleMesh.GetIndexStart(0),
       ParticleMesh.GetBaseVertex(0),
       0
     };
 
-    ParticlesBuffer = new ComputeBuffer(AmountParticlesPerAxis, 44);
+    ParticlesBuffer = new ComputeBuffer(totalParticles, 44);
     argsBuffer = new ComputeBuffer(1, args.Length * sizeof(uint), ComputeBufferType.IndirectArguments);
 
-    ParticlesBuffer.SetData(Particles);    
+    ParticlesBuffer.SetData(Particles);
     argsBuffer.SetData(args);
 
     integrateKernel = CustomShader.FindKernel("Integrate");
     computeForceKernel = CustomShader.FindKernel("ComputeForces");
     densityPressureKernel = CustomShader.FindKernel("ComputeDensityPressure");
 
-    CustomShader.SetInt("length", AmountParticlesPerAxis);
-    CustomShader.SetFloat("mass", Mass);
+    CustomShader.SetInt("particleLength", totalParticles);
+    CustomShader.SetFloat("particleMass", Mass);
     CustomShader.SetFloat("viscosity", Viscosity);
     CustomShader.SetFloat("gasConstant", GasConstant);
     CustomShader.SetFloat("restDensity", RestingDensity);
-    CustomShader.SetFloat("amping", Damping);
+    CustomShader.SetFloat("boundDamping", Damping);
     CustomShader.SetFloat("pi", Mathf.PI);
-    CustomShader.SetVector("boundingSize", BoundingBox);
+    CustomShader.SetVector("boxSize", BoundingBox);
 
     CustomShader.SetFloat("radius", R);
     CustomShader.SetFloat("radius2", R * R);
@@ -99,20 +112,27 @@ public class SPH : MonoBehaviour {
     CustomShader.SetBuffer(densityPressureKernel, "_particles", ParticlesBuffer);
   }
 
-  private void FixedUpdate() {
-    CustomShader.Dispatch(densityPressureKernel, TotalParticles / 100, 1, 1);
-    CustomShader.Dispatch(computeForceKernel, TotalParticles / 100, 1, 1);
-    CustomShader.Dispatch(integrateKernel, TotalParticles / 100, 1, 1);
+  private void FixedUpdate()
+  {
+    CustomShader.SetVector("boxSize", BoundingBox);
+    CustomShader.SetFloat("timestep", Timestep);
+    CustomShader.SetVector("spherePos", collisionSphere.transform.position);
+    CustomShader.SetFloat("sphereRadius", collisionSphere.transform.localScale.x / 2);
+
+    CustomShader.Dispatch(densityPressureKernel, totalParticles / 100, 1, 1);
+    CustomShader.Dispatch(computeForceKernel, totalParticles / 100, 1, 1);
+    CustomShader.Dispatch(integrateKernel, totalParticles / 100, 1, 1);
   }
-  
-  private void SpawnParticles () {
+
+  private void SpawnParticles()
+  {
     List<Particle> particlesList = new List<Particle>();
 
-    for (int x = 0; x < AmountParticlesPerAxis; x++)
+    for (int x = 0; x < AmountParticles.x; x++)
     {
-      for (int y = 0; y < AmountParticlesPerAxis; y++)
+      for (int y = 0; y < AmountParticles.y; y++)
       {
-        for (int z = 0; z < AmountParticlesPerAxis; z++)
+        for (int z = 0; z < AmountParticles.z; z++)
         {
 
           Vector3 positionSpawn = SpawnLoc + new Vector3(x * R * 2, y * R * 2, z * R * 2);
@@ -131,11 +151,13 @@ public class SPH : MonoBehaviour {
     Particles = particlesList.ToArray();
   }
 
-  private void Update () {
+  private void Update()
+  {
     ParticleMat.SetFloat(SizeProperty, RenderSize);
     ParticleMat.SetBuffer(ParticlesBufferProperty, ParticlesBuffer);
-    if (Visible) {
-      Graphics.DrawMeshInstancedIndirect (
+    if (Visible)
+    {
+      Graphics.DrawMeshInstancedIndirect(
         ParticleMesh,
         0,
         ParticleMat,

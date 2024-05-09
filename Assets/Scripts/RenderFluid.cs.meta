@@ -3,7 +3,11 @@ guid: aa55ccef3a80de84087ae152709477d7
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - raymarching: {instanceID: 0}
+  - cam: {instanceID: 0}
+  - sph: {instanceID: 0}
+  - lightSource: {instanceID: 0}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
