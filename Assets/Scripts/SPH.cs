@@ -119,6 +119,7 @@ public class SPH : MonoBehaviour
     CustomShader.SetVector("spherePos", collisionSphere.transform.position);
     CustomShader.SetFloat("sphereRadius", collisionSphere.transform.localScale.x / 2);
 
+
     CustomShader.Dispatch(densityPressureKernel, totalParticles / 100, 1, 1);
     CustomShader.Dispatch(computeForceKernel, totalParticles / 100, 1, 1);
     CustomShader.Dispatch(integrateKernel, totalParticles / 100, 1, 1);

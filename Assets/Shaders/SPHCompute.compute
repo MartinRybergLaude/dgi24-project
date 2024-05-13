@@ -44,7 +44,7 @@ void Integrate (uint3 id: SV_DISPATCHTHREADID) {
     // Min Boundary Enforcements
     if (_particles[id.x].position.x - radius < bottomLeft.x) {
         vel.x *= boundDamping;
-        _particles[id.x].position.x = bottomLeft.x + radius;
+        _particles[id.x].position.x = bottomLeft.x + boxSize;
     }
     if (_particles[id.x].position.y - radius < bottomLeft.y) {
        vel.y *= boundDamping;
@@ -153,7 +153,7 @@ void ComputeForces (uint3 id : SV_DISPATCHTHREADID) {
 
     }
 
-    _particles[id.x].currentForce = float3(0,-9.81*particleMass,0) - pressure + visc;
+    _particles[id.x].currentForce = float3(-5,-9.81*particleMass,0) - pressure + visc;
 
     float3 colDir = _particles[id.x].position - spherePos;
     if (length(colDir) < sphereRadius) {
