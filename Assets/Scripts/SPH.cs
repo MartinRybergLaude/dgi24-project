@@ -2,6 +2,8 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Unity.VisualScripting;
+using System.Linq;
 
 [System.Serializable]
 [StructLayout(LayoutKind.Sequential, Size = 44)]
@@ -51,7 +53,13 @@ public class SPH : MonoBehaviour
   private int integrateKernel;
   private int computeForceKernel;
   private int densityPressureKernel;
+  private int hashParticleKernel;
+  private int sortKernel;
+  private int offsetKernel;
   private ComputeBuffer argsBuffer;
+  private ComputeBuffer indexBuffer;
+  private ComputeBuffer cellIndexBuffer;
+  private ComputeBuffer cellOffsetBuffer;
   private static readonly int SizeProperty = Shader.PropertyToID("_size");
   private static readonly int ParticlesBufferProperty = Shader.PropertyToID("_particlesBuffer");
   private int totalParticles
@@ -84,13 +92,21 @@ public class SPH : MonoBehaviour
 
     ParticlesBuffer = new ComputeBuffer(totalParticles, 44);
     argsBuffer = new ComputeBuffer(1, args.Length * sizeof(uint), ComputeBufferType.IndirectArguments);
-
+    indexBuffer = new ComputeBuffer(totalParticles, 4);
+    cellIndexBuffer = new ComputeBuffer(totalParticles, 4);
+    cellOffsetBuffer = new ComputeBuffer(totalParticles, 4);
+    uint[] particleIndexArray = Enumerable.Range(0, totalParticles).Select(i => (uint)i).ToArray();
+    
     ParticlesBuffer.SetData(Particles);
     argsBuffer.SetData(args);
+    indexBuffer.SetData(particleIndexArray);
 
     integrateKernel = CustomShader.FindKernel("Integrate");
     computeForceKernel = CustomShader.FindKernel("ComputeForces");
     densityPressureKernel = CustomShader.FindKernel("ComputeDensityPressure");
+    hashParticleKernel = CustomShader.FindKernel("HashParticles");
+    sortKernel = CustomShader.FindKernel("BitonicSort");
+    offsetKernel = CustomShader.FindKernel("CalculateCellOffsets");
 
     CustomShader.SetInt("particleLength", totalParticles);
     CustomShader.SetFloat("particleMass", Mass);
@@ -108,8 +124,29 @@ public class SPH : MonoBehaviour
     CustomShader.SetFloat("radius5", R * R * R * R * R);
 
     CustomShader.SetBuffer(integrateKernel, "_particles", ParticlesBuffer);
+
     CustomShader.SetBuffer(computeForceKernel, "_particles", ParticlesBuffer);
+    CustomShader.SetBuffer(computeForceKernel, "_particleIndexArray", indexBuffer);
+    CustomShader.SetBuffer(computeForceKernel, "_cellIndexArray", cellIndexBuffer);
+    CustomShader.SetBuffer(computeForceKernel, "_cellOffset", cellOffsetBuffer);
+
     CustomShader.SetBuffer(densityPressureKernel, "_particles", ParticlesBuffer);
+    CustomShader.SetBuffer(densityPressureKernel, "_particleIndexArray", indexBuffer);
+    CustomShader.SetBuffer(densityPressureKernel, "_cellIndexArray", cellIndexBuffer);
+    CustomShader.SetBuffer(densityPressureKernel, "_cellOffset", cellOffsetBuffer);
+
+    CustomShader.SetBuffer(hashParticleKernel, "_particles", ParticlesBuffer);
+    CustomShader.SetBuffer(hashParticleKernel, "_particleIndexArray", indexBuffer);
+    CustomShader.SetBuffer(hashParticleKernel, "_cellIndexArray", cellIndexBuffer);
+    CustomShader.SetBuffer(hashParticleKernel, "_cellOffset", cellOffsetBuffer);
+
+    CustomShader.SetBuffer(sortKernel, "_particleIndexArray", indexBuffer);
+    CustomShader.SetBuffer(sortKernel, "_cellIndexArray", cellIndexBuffer);
+
+    CustomShader.SetBuffer(offsetKernel, "_particleIndexArray", indexBuffer);
+    CustomShader.SetBuffer(offsetKernel, "_cellIndexArray", cellIndexBuffer);
+    CustomShader.SetBuffer(offsetKernel, "_cellOffset", cellOffsetBuffer);
+
   }
 
   private void FixedUpdate()
@@ -118,11 +155,21 @@ public class SPH : MonoBehaviour
     CustomShader.SetFloat("timestep", Timestep);
     CustomShader.SetVector("spherePos", collisionSphere.transform.position);
     CustomShader.SetFloat("sphereRadius", collisionSphere.transform.localScale.x / 2);
-
-
-    CustomShader.Dispatch(densityPressureKernel, totalParticles / 100, 1, 1);
-    CustomShader.Dispatch(computeForceKernel, totalParticles / 100, 1, 1);
-    CustomShader.Dispatch(integrateKernel, totalParticles / 100, 1, 1);
+    
+    CustomShader.Dispatch(hashParticleKernel, totalParticles / 256, 1, 1);
+    
+    for (var d = 2; d <= totalParticles; d <<= 1) {
+      CustomShader.SetInt("sortDim", d);
+      for (var b = d >> 1; b > 0; b >>= 1) {
+        CustomShader.SetInt("sortBlock", b);
+        CustomShader.Dispatch(sortKernel, totalParticles/256, 1, 1);
+      }
+    }
+    
+    CustomShader.Dispatch(offsetKernel, totalParticles/256, 1, 1);
+    CustomShader.Dispatch(densityPressureKernel, totalParticles / 256, 1, 1);
+    CustomShader.Dispatch(computeForceKernel, totalParticles / 256, 1, 1);
+    CustomShader.Dispatch(integrateKernel, totalParticles / 256, 1, 1);
   }
 
   private void SpawnParticles()

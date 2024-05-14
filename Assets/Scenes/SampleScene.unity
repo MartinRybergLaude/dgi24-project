@@ -153,9 +153,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   collisionSphere: {fileID: 1311743625}
-  cB: {fileID: 1058163636}
   R: 0.1
-  AmountParticles: {x: 10, y: 10, z: 10}
+  AmountParticles: {x: 16, y: 16, z: 16}
   SpawnLoc: {x: 0, y: 3.1, z: 0}
   G: {x: 0, y: 0, z: 0}
   Visible: 1
