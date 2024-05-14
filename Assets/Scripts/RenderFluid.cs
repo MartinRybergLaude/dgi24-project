@@ -4,86 +4,82 @@ using UnityEngine;
 
 public class FluidRayMarching : MonoBehaviour
 {
-  public ComputeShader raymarching;
-  public Camera cam;
+  [Header("dependencies")]
+  public ComputeShader CustomShader;
+  public Camera Camera;
 
-  List<ComputeBuffer> buffersToDispose = new List<ComputeBuffer>();
-
-  public SPH sph;
-
-  RenderTexture target;
-
-  [Header("Params")]
-  public float viewRadius;
-  public float blendStrength;
-  public Color waterColor;
-
-  public Color ambientLight;
-
-  public Light lightSource;
+  public SPH Sph;
 
 
-  void InitRenderTexture()
-  {
-    if (target == null || target.width != cam.pixelWidth || target.height != cam.pixelHeight)
-    {
-      if (target != null)
-      {
-        target.Release();
-      }
+  [Header("params")]
+  public Color Color;
 
-      cam.depthTextureMode = DepthTextureMode.Depth;
+  public Color AmbientLight;
 
-      target = new RenderTexture(cam.pixelWidth, cam.pixelHeight, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
-      target.enableRandomWrite = true;
-      target.Create();
-    }
-  }
+  public Light LightSource;
 
 
-  private bool render = false;
+
+  float r = 0.01f;
+  float blend = 0.5f;
+  RenderTexture texture;
+
+  bool enableRendering = false;
+  bool isInitializing = false;
 
   public ComputeBuffer _particlesBuffer;
 
-  public void Begin()
+  public void Initialize()
   {
-    InitRenderTexture();
-    raymarching.SetBuffer(0, "particles", sph.ParticlesBuffer);
-    raymarching.SetInt("numParticles", sph.Particles.Length);
-    raymarching.SetFloat("particleRadius", viewRadius);
-    raymarching.SetFloat("blendStrength", blendStrength);
-    raymarching.SetVector("waterColor", waterColor);
-    raymarching.SetVector("_AmbientLight", ambientLight);
-    raymarching.SetTextureFromGlobal(0, "_DepthTexture", "_CameraDepthTexture");
-    render = true;
+    // Load the render texture
+    if (texture != null && texture.width == Camera.pixelWidth && texture.height == Camera.pixelHeight)
+    {
+      return;
+    }
+
+    if (texture != null)
+    {
+      texture.Release();
+    }
+
+    Camera.depthTextureMode = DepthTextureMode.Depth;
+
+    texture = new RenderTexture(Camera.pixelWidth, Camera.pixelHeight, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+    texture.enableRandomWrite = true;
+    texture.Create();
+
+    // Set shader parameters
+    CustomShader.SetBuffer(0, "particles", Sph.ParticlesBuffer);
+    CustomShader.SetInt("numParticles", Sph.Particles.Length);
+    CustomShader.SetFloat("particleRadius", r);
+    CustomShader.SetFloat("blendStrength", blend);
+    CustomShader.SetVector("waterColor", Color);
+    CustomShader.SetVector("_AmbientLight", AmbientLight);
+    CustomShader.SetTextureFromGlobal(0, "_DepthTexture", "_CameraDepthTexture");
+
+    enableRendering = true;
   }
 
 
   void OnRenderImage(RenderTexture source, RenderTexture destination)
   {
-
-    if (!render)
+    if (!enableRendering)
     {
-      Begin();
+      Initialize();
     }
 
-    if (render)
-    {
+    CustomShader.SetVector("_Light", LightSource.transform.forward);
 
-      raymarching.SetVector("_Light", lightSource.transform.forward);
+    CustomShader.SetTexture(0, "Source", source);
+    CustomShader.SetTexture(0, "Destination", texture);
+    CustomShader.SetVector("_CameraPos", Camera.transform.position);
+    CustomShader.SetMatrix("_CameraToWorld", Camera.cameraToWorldMatrix);
+    CustomShader.SetMatrix("_CameraInverseProjection", Camera.projectionMatrix.inverse);
 
-      raymarching.SetTexture(0, "Source", source);
-      raymarching.SetTexture(0, "Destination", target);
-      raymarching.SetVector("_CameraPos", cam.transform.position);
-      raymarching.SetMatrix("_CameraToWorld", cam.cameraToWorldMatrix);
-      raymarching.SetMatrix("_CameraInverseProjection", cam.projectionMatrix.inverse);
+    int threadGroupsX = Mathf.CeilToInt(Camera.pixelWidth / 8.0f);
+    int threadGroupsY = Mathf.CeilToInt(Camera.pixelHeight / 8.0f);
+    CustomShader.Dispatch(0, threadGroupsX, threadGroupsY, 1);
 
-      int threadGroupsX = Mathf.CeilToInt(cam.pixelWidth / 8.0f);
-      int threadGroupsY = Mathf.CeilToInt(cam.pixelHeight / 8.0f);
-      raymarching.Dispatch(0, threadGroupsX, threadGroupsY, 1);
-
-      Graphics.Blit(target, destination);
-    }
+    Graphics.Blit(texture, destination);
   }
-
 }

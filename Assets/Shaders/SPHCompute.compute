@@ -153,7 +153,7 @@ void ComputeForces (uint3 id : SV_DISPATCHTHREADID) {
 
     }
 
-    _particles[id.x].currentForce = float3(-5,-9.81*particleMass,0) - pressure + visc;
+    _particles[id.x].currentForce = float3(-2,-9.81*particleMass,0) - pressure + visc;
 
     float3 colDir = _particles[id.x].position - spherePos;
     if (length(colDir) < sphereRadius) {

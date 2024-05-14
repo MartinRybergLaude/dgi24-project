@@ -180,7 +180,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
             float3 pointOnSurface = ray.origin + ray.direction * dst;
             float3 normal = EstimateNormal(pointOnSurface - ray.direction * epsilon);
             float3 lightDir = -_Light;
-            float lighting = saturate(saturate(dot(normal,lightDir))) ;
+            float lighting = saturate(saturate(dot(normal,lightDir)));
 
             float3 reflectDir = reflect(-lightDir, normal);
             float spec = pow(max(dot(ray.direction, reflectDir), 0.0), 32);
