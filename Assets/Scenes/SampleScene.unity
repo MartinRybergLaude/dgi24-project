@@ -352,7 +352,7 @@ MonoBehaviour:
   BoundingBox: {x: 5, y: 10, z: 3}
   CustomShader: {fileID: 7200000, guid: e42397f59b11fb94a80e0e23592009ef, type: 3}
   Particles: []
-  Damping: -0.3
+  Damping: -0.7
   Viscosity: -0.01
   Mass: 1
   GasConstant: 2
@@ -871,7 +871,7 @@ Transform:
   m_GameObject: {fileID: 1311743621}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.224, y: -4.215, z: -0.018}
+  m_LocalPosition: {x: 0.005, y: -5.206, z: -0.018}
   m_LocalScale: {x: 2, y: 2, z: 2}
   m_ConstrainProportionsScale: 0
   m_Children: []
